@@ -2189,13 +2189,27 @@ def VORLESER():
         # Sprachausgabe über die im Browser eingebaute Web Speech API
         # (window.speechSynthesis) – funktioniert ohne Server/Internet,
         # nutzt die vom Betriebssystem/Browser bereitgestellten Stimmen.
+        # Als rohes JS ausgeführt (statt über die Python-JS-Bridge-Proxys),
+        # da das zuverlässiger ist als der Konstruktor-Aufruf über .new().
         try:
             import platform
-            window = platform.window
-            utterance = window.SpeechSynthesisUtterance.new(TEXT)
-            utterance.lang = "de-DE"
-            utterance.rate = 1.0
-            window.speechSynthesis.speak(utterance)
+            escaped = (str(TEXT).replace("\\", "\\\\")
+                                  .replace('"', '\\"')
+                                  .replace("\n", " "))
+            js_code = (
+                '(function(){'
+                'try{'
+                'var u=new SpeechSynthesisUtterance("' + escaped + '");'
+                'var stimmen=window.speechSynthesis.getVoices();'
+                'for(var i=0;i<stimmen.length;i++){'
+                'if(stimmen[i].lang&&stimmen[i].lang.toLowerCase().indexOf("de")===0){'
+                'u.voice=stimmen[i];break;}}'
+                'u.lang="de-DE";u.rate=1.0;'
+                'window.speechSynthesis.speak(u);'
+                '}catch(e){console.error("SIMKAP SPEAK Fehler:",e);}'
+                '})();'
+            )
+            platform.window.eval(js_code)
         except Exception as e:
             print("Sprachausgabe nicht möglich:", e)
 
