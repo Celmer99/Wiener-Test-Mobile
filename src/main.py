@@ -1,7 +1,6 @@
 # =======================================
-# Wiener Test SEK – Web-Version für unterwegs (Handy/Tablet, Touch-Bedienung)
-# Enthält DAUF, SIGNAL, INHIB, VIGIL, VISGED. SIMKAP bleibt der PC-Version
-# vorbehalten (Sprachausgabe, viele kleine Felder – am Handy nicht sinnvoll).
+# Wiener Test SEK – Web-Version (Browser, mausgesteuert am PC, touch am Handy)
+# Enthält alle sechs Testverfahren: DAUF, SIGNAL, INHIB, SIMKAP, VISGED, VIGIL.
 # =======================================
 import asyncio
 import importlib
@@ -17,6 +16,7 @@ SPIELE = [
     ("DAUF", "games.DAUF"),
     ("SIGNAL", "games.SIGNAL"),
     ("INHIB", "games.INHIB"),
+    ("SIMKAP", "games.SIMKAP"),
     ("VISGED", "games.VISGED"),
     ("VIGIL", "games.VIGIL"),
 ]
@@ -47,6 +47,13 @@ INSTRUKTIONEN = {
         "aber NICHT, wenn kurz darauf ein Ton erklingt!",
         "Der Ton kommt mit der Zeit immer später: Je besser du stoppst,",
         "desto schwerer wird es.",
+    ],
+    "SIMKAP": [
+        "Streiche im rechten Feld alle Einträge durch, die auch",
+        "im linken Vergleichsfeld vorkommen. NÄCHSTES bringt ein neues Feld.",
+        "Nebenbei werden Fragen vorgelesen: Beantworte sie mithilfe",
+        "von Kalender und Telefonbuch und markiere die Antwort unten.",
+        "Hinweis: Für die Sprachausgabe braucht dein Browser Ton erlaubt.",
     ],
     "VISGED": [
         "Präge dir die Position der Symbole auf der Karte ein.",
@@ -322,6 +329,20 @@ async def main():
                 continue
             await spiel_starten(win, modulname, spiel_name, tempo=tempo,
                                 symbole=symbole, runden=runden)
+        elif modulname in ("games.SIMKAP", "games.INHIB"):
+            # SIMKAP hat keine Geschwindigkeitsstufen; INHIB regelt seine
+            # Schwierigkeit selbst (adaptives Stoppsignal) – wie am PC.
+            auswahl = await kombi_menue(win, spiel_name, [
+                ("Übungsdauer", DAUERN_KACHELN, None),
+            ])
+            if auswahl is None:
+                win = await fenster_oeffnen()
+                continue
+            (wert,) = auswahl
+            if not await instruktion_anzeigen(win, spiel_name):
+                win = await fenster_oeffnen()
+                continue
+            await spiel_starten(win, modulname, spiel_name, wert=wert)
         else:
             auswahl = await kombi_menue(win, spiel_name, [
                 ("Geschwindigkeit", TEMPO_STUFEN, "normal"),
