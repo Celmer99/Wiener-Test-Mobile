@@ -1,6 +1,8 @@
 # =======================================
 # VISGED – Web-Version (Touch-Bedienung, async für den Browser)
-# Zustandslogik (EINGABE/ANZEIGEN/RESET) 1:1 aus der PC-Version übernommen.
+# Ablauf identisch zur PC-Version: Einprägphase und Symbolanzeige sind
+# zeitgesteuert, Platzieren und Rückmeldung dagegen klickgesteuert
+# (kein Zeitlimit) – wie im Original.
 # =======================================
 import asyncio
 import random
@@ -31,10 +33,18 @@ ICON_DATEIEN = ['Bahnhof.png', 'Bar.PNG', 'Bibliothek.PNG', 'Bushaltestelle.PNG'
                 'Taxi_Stand.PNG', 'Telefon.PNG', 'WC.PNG']
 ICONS = [_lade_bild(name) for name in ICON_DATEIEN]
 
-FRAMES_PRO_SYMBOL = 240
+SYMBOL_FRAMES = 120       # 2 Sekunden das gesuchte Symbol allein zeigen
+FEEDBACK_MIN_FRAMES = 15  # Rückmeldung kurz sperren, damit ein Doppelklick
+                          # sie nicht versehentlich sofort wegtippt
 PUNKTE_PRO_SYMBOL = 130
 _EINPRAEG_STUFEN = {"langsam": 600, "normal": 420, "schnell": 300}
 _EINPRAEG_NAMEN = {"langsam": "Lang", "normal": "Normal", "schnell": "Kurz"}
+
+
+def _ist_platzierung(event):
+    """Klick/Tipp, der nicht auf dem Abbrechen-Button liegt."""
+    return (event.type == pygame.MOUSEBUTTONDOWN
+            and not ABBRECHEN_RECT.collidepoint(event.pos))
 
 
 def _layout(anzahl_symbole):
@@ -58,86 +68,114 @@ def _layout(anzahl_symbole):
     return karte, uebungs_icons
 
 
-async def run(win, symbole, runden, tempo="normal"):
-    anzeige_frames = _EINPRAEG_STUFEN.get(tempo, 420)
-    tempo_name = _EINPRAEG_NAMEN.get(tempo, "Normal")
-    runden_frames = anzeige_frames + symbole * FRAMES_PRO_SYMBOL
-
-    clock = pygame.time.Clock()
-    genauigkeit = []
-
-    karte, uebungs_icons = _layout(symbole)
-    gameloop = 0
-    runde = 0
-    eingabe = False
-    anzeigen = False
-    reset = True
-    treffer = (0, 0)
-    abgebrochen = False
-
-    while runde < runden:
+async def _einpraegphase(win, clock, karte, uebungs_icons, anzeige_frames):
+    """Karte mit allen Symbolen zeigen. False = Übung abgebrochen."""
+    for _ in range(anzeige_frames):
         for event in pygame.event.get():
             if ist_abbruch_event(event):
-                abgebrochen = True
-                break
-            if (event.type == pygame.MOUSEBUTTONDOWN and eingabe and not anzeigen
-                    and not ABBRECHEN_RECT.collidepoint(event.pos)):
-                treffer = event.pos
-                anzeigen = True
-        if abgebrochen:
-            break
-
-        gameloop += 1
+                return False
 
         win.fill(WHITE)
-        if gameloop < anzeige_frames and not eingabe:
-            win.blit(karte, (400, 120))
-            for icon, x, y in uebungs_icons:
-                win.blit(icon, (x, y))
-        elif gameloop >= anzeige_frames:
-            index = (gameloop - anzeige_frames) // FRAMES_PRO_SYMBOL
-            phase = (gameloop - anzeige_frames) % FRAMES_PRO_SYMBOL
-            if index < len(uebungs_icons):
-                icon, x, y = uebungs_icons[index]
-                if phase < FRAMES_PRO_SYMBOL // 2:
-                    anzeigen = False
-                    reset = True
-                    win.fill(WHITE)
-                    win.blit(icon, (WIDTH / 2 - 32, HEIGHT / 2 - 30))
-                else:
-                    win.fill(WHITE)
-                    win.blit(karte, (400, 120))
-                    eingabe = True
-                    if not anzeigen:
-                        rect = pygame.Rect(0, 0, 65, 61)
-                        rect.center = pygame.mouse.get_pos()
-                        win.blit(icon, rect)
-                    if anzeigen:
-                        pygame.draw.circle(win, RED, (x + 32, y + 30), 130, 5)
-                        win.blit(icon, (x, y))
-                        win.blit(icon, (int(treffer[0]) - 32, int(treffer[1]) - 30))
-                        if reset:
-                            wert_w = abs(treffer[0] - x - 32)
-                            wert_h = abs(treffer[1] - y - 30)
-                            genauigkeit.append(max(0, 130 - max(wert_w, wert_h)))
-                            reset = False
-                        eingabe = False
+        win.blit(karte, (400, 120))
+        for icon, x, y in uebungs_icons:
+            win.blit(icon, (x, y))
+        abbrechen_zeichnen(win)
+        pygame.display.flip()
+        clock.tick(FPS)
+        await asyncio.sleep(0)
+    return True
 
+
+async def _symbol_abfragen(win, clock, karte, icon, x, y, genauigkeit):
+    """Ein Symbol abfragen: zeigen, platzieren lassen, Rückmeldung.
+
+    Platzieren und Rückmeldung laufen ohne Zeitlimit – es geht erst weiter,
+    wenn getippt wurde. False = Übung abgebrochen.
+    """
+    # 1. Das gesuchte Symbol allein zeigen (zeitgesteuert)
+    for _ in range(SYMBOL_FRAMES):
+        for event in pygame.event.get():
+            if ist_abbruch_event(event):
+                return False
+
+        win.fill(WHITE)
+        win.blit(icon, (WIDTH / 2 - 32, HEIGHT / 2 - 30))
         abbrechen_zeichnen(win)
         pygame.display.flip()
         clock.tick(FPS)
         await asyncio.sleep(0)
 
-        if gameloop > runden_frames:
-            runde += 1
-            if runde < runden:
-                gameloop = 0
-                eingabe = False
-                anzeigen = False
-                reset = True
-                karte, uebungs_icons = _layout(symbole)
+    # 2. Position antippen – ohne Zeitlimit
+    pygame.event.clear(pygame.MOUSEBUTTONDOWN)
+    treffer = None
+    while treffer is None:
+        for event in pygame.event.get():
+            if ist_abbruch_event(event):
+                return False
+            if _ist_platzierung(event):
+                treffer = event.pos
 
-    max_punkte = PUNKTE_PRO_SYMBOL * symbole * runden
+        win.fill(WHITE)
+        win.blit(karte, (400, 120))
+        rect = pygame.Rect(0, 0, 65, 61)
+        rect.center = pygame.mouse.get_pos()
+        win.blit(icon, rect)
+        abbrechen_zeichnen(win)
+        pygame.display.flip()
+        clock.tick(FPS)
+        await asyncio.sleep(0)
+
+    # Bewertung: größerer der beiden Abstände zur Symbolmitte
+    wert_breite = abs(treffer[0] - x - 32)
+    wert_hoehe = abs(treffer[1] - y - 30)
+    genauigkeit.append(max(0, PUNKTE_PRO_SYMBOL - max(wert_breite, wert_hoehe)))
+
+    # 3. Rückmeldung – bleibt stehen, bis erneut getippt wird
+    pygame.event.clear(pygame.MOUSEBUTTONDOWN)
+    frames = 0
+    while True:
+        for event in pygame.event.get():
+            if ist_abbruch_event(event):
+                return False
+            if _ist_platzierung(event) and frames >= FEEDBACK_MIN_FRAMES:
+                return True
+
+        frames += 1
+        win.fill(WHITE)
+        win.blit(karte, (400, 120))
+        pygame.draw.circle(win, RED, (x + 32, y + 30), 130, 5)
+        win.blit(icon, (x, y))
+        win.blit(icon, (int(treffer[0]) - 32, int(treffer[1]) - 30))
+        abbrechen_zeichnen(win)
+        pygame.display.flip()
+        clock.tick(FPS)
+        await asyncio.sleep(0)
+
+
+async def run(win, symbole, runden, tempo="normal"):
+    anzeige_frames = _EINPRAEG_STUFEN.get(tempo, 420)
+    tempo_name = _EINPRAEG_NAMEN.get(tempo, "Normal")
+
+    clock = pygame.time.Clock()
+    genauigkeit = []
+
+    for _ in range(runden):
+        karte, uebungs_icons = _layout(symbole)
+
+        if not await _einpraegphase(win, clock, karte, uebungs_icons, anzeige_frames):
+            break
+
+        abgebrochen = False
+        for icon, x, y in uebungs_icons:
+            if not await _symbol_abfragen(win, clock, karte, icon, x, y, genauigkeit):
+                abgebrochen = True
+                break
+        if abgebrochen:
+            break
+
+    # Bezugsgröße sind die tatsächlich abgefragten Symbole – bei einem
+    # vorzeitigen Abbruch zählen die noch offenen Symbole nicht mit.
+    max_punkte = PUNKTE_PRO_SYMBOL * len(genauigkeit)
     prozent = round(sum(genauigkeit) / max_punkte * 100, 2) if genauigkeit else 0
 
     ergebnisse.speichern(
