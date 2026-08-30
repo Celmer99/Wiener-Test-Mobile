@@ -21,6 +21,9 @@ SPIELE = [
     ("VIGIL", "games.VIGIL"),
 ]
 
+# Tests, bei denen der Mauszeiger während der Übung ausgeblendet wird
+SPIELE_OHNE_MAUSZEIGER = {"games.DAUF", "games.SIGNAL", "games.INHIB", "games.VIGIL"}
+
 TEMPO_STUFEN = [("Langsam", "langsam"), ("Normal", "normal"), ("Schnell", "schnell")]
 EINPRAEG_STUFEN = [("Lang", "langsam"), ("Normal", "normal"), ("Kurz", "schnell")]
 SYMBOLE_VISGED = [(str(n), n) for n in (4, 5, 6, 7, 8, 9)]
@@ -292,10 +295,19 @@ async def statistik_anzeigen(win):
 async def spiel_starten(win, modulname, spiel_name, wert=None, tempo=None,
                         symbole=None, runden=None):
     modul = importlib.import_module(modulname)
-    if modulname == "games.VISGED":
-        await modul.run(win, symbole=symbole, runden=runden, tempo=tempo)
-    else:
-        await modul.run(win, dauer_sekunden=wert, tempo=tempo)
+
+    # Bei diesen Tests lenkt der Mauszeiger nur ab – VISGED und SIMKAP
+    # brauchen ihn dagegen zum Zielen bzw. Anklicken.
+    if modulname in SPIELE_OHNE_MAUSZEIGER:
+        pygame.mouse.set_visible(False)
+    try:
+        if modulname == "games.VISGED":
+            await modul.run(win, symbole=symbole, runden=runden, tempo=tempo)
+        else:
+            await modul.run(win, dauer_sekunden=wert, tempo=tempo)
+    finally:
+        # In jedem Fall wieder einblenden – auch bei Abbruch oder Fehler
+        pygame.mouse.set_visible(True)
 
 
 async def main():

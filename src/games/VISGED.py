@@ -1,8 +1,8 @@
 # =======================================
 # VISGED – Web-Version (Touch-Bedienung, async für den Browser)
 # Ablauf identisch zur PC-Version: Einprägphase und Symbolanzeige sind
-# zeitgesteuert, Platzieren und Rückmeldung dagegen klickgesteuert
-# (kein Zeitlimit) – wie im Original.
+# zeitgesteuert, das Platzieren dagegen ohne Zeitlimit (erst der Klick
+# schaltet weiter). Danach 1 Sekunde Auflösung, dann automatisch weiter.
 # =======================================
 import asyncio
 import random
@@ -33,9 +33,8 @@ ICON_DATEIEN = ['Bahnhof.png', 'Bar.PNG', 'Bibliothek.PNG', 'Bushaltestelle.PNG'
                 'Taxi_Stand.PNG', 'Telefon.PNG', 'WC.PNG']
 ICONS = [_lade_bild(name) for name in ICON_DATEIEN]
 
-SYMBOL_FRAMES = 120       # 2 Sekunden das gesuchte Symbol allein zeigen
-FEEDBACK_MIN_FRAMES = 15  # Rückmeldung kurz sperren, damit ein Doppelklick
-                          # sie nicht versehentlich sofort wegtippt
+SYMBOL_FRAMES = 120    # 2 Sekunden das gesuchte Symbol allein zeigen
+FEEDBACK_FRAMES = 60   # 1 Sekunde die Auflösung zeigen, dann automatisch weiter
 PUNKTE_PRO_SYMBOL = 130
 _EINPRAEG_STUFEN = {"langsam": 600, "normal": 420, "schnell": 300}
 _EINPRAEG_NAMEN = {"langsam": "Lang", "normal": "Normal", "schnell": "Kurz"}
@@ -130,17 +129,12 @@ async def _symbol_abfragen(win, clock, karte, icon, x, y, genauigkeit):
     wert_hoehe = abs(treffer[1] - y - 30)
     genauigkeit.append(max(0, PUNKTE_PRO_SYMBOL - max(wert_breite, wert_hoehe)))
 
-    # 3. Rückmeldung – bleibt stehen, bis erneut getippt wird
-    pygame.event.clear(pygame.MOUSEBUTTONDOWN)
-    frames = 0
-    while True:
+    # 3. Auflösung 1 Sekunde zeigen, danach automatisch zum nächsten Symbol
+    for _ in range(FEEDBACK_FRAMES):
         for event in pygame.event.get():
             if ist_abbruch_event(event):
                 return False
-            if _ist_platzierung(event) and frames >= FEEDBACK_MIN_FRAMES:
-                return True
 
-        frames += 1
         win.fill(WHITE)
         win.blit(karte, (400, 120))
         pygame.draw.circle(win, RED, (x + 32, y + 30), 130, 5)
@@ -150,6 +144,7 @@ async def _symbol_abfragen(win, clock, karte, icon, x, y, genauigkeit):
         pygame.display.flip()
         clock.tick(FPS)
         await asyncio.sleep(0)
+    return True
 
 
 async def run(win, symbole, runden, tempo="normal"):

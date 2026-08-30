@@ -31,11 +31,11 @@ SSD_MAX = 350
 
 KREUZ = pygame.image.load(resource_path('Kreuz.PNG'))
 PFEIL_LINKS = pygame.image.load(resource_path('Pfeil_Links.PNG'))
-BUTTON_LINKS = pygame.transform.scale(PFEIL_LINKS, (120, 120))
-BUTTON_RECHTS = pygame.transform.rotate(BUTTON_LINKS, 180)
-
-LINKS_RECT = pygame.Rect(80, HEIGHT - 180, 120, 120)
-RECHTS_RECT = pygame.Rect(WIDTH - 200, HEIGHT - 180, 120, 120)
+# Die Pfeil-Buttons werden nicht mehr angezeigt (nur noch der Reiz in der
+# Mitte). Damit der Test auf dem Handy ohne Tastatur bedienbar bleibt, sind
+# stattdessen die linke und rechte Bildschirmhälfte unsichtbare Tippflächen.
+LINKS_RECT = pygame.Rect(0, 0, WIDTH // 2, HEIGHT)
+RECHTS_RECT = pygame.Rect(WIDTH // 2, 0, WIDTH // 2, HEIGHT)
 
 
 def stopton_erzeugen():
@@ -68,16 +68,12 @@ def _pfeil_anzeigen(win, rotation):
     win.fill(WHITE)
     pfeil = pygame.transform.rotate(PFEIL_LINKS, rotation)
     win.blit(pfeil, (WIDTH // 2 - pfeil.get_width() // 2, HEIGHT // 2 - pfeil.get_height() // 2))
-    win.blit(BUTTON_LINKS, LINKS_RECT.topleft)
-    win.blit(BUTTON_RECHTS, RECHTS_RECT.topleft)
     abbrechen_zeichnen(win)
 
 
 def _kreuz_anzeigen(win):
     win.fill(WHITE)
     win.blit(KREUZ, (WIDTH // 2 - KREUZ.get_width() // 2, HEIGHT // 2 - KREUZ.get_height() // 2))
-    win.blit(BUTTON_LINKS, LINKS_RECT.topleft)
-    win.blit(BUTTON_RECHTS, RECHTS_RECT.topleft)
     abbrechen_zeichnen(win)
 
 
@@ -100,6 +96,8 @@ async def _pfeilphase(win, rotation, ist_stop, ssd, ton):
             return False, None, None
 
         for event in pygame.event.get():
+            # Muss zuerst geprüft werden: Der Abbrechen-Button liegt in der
+            # linken Tippfläche und würde sonst als Antwort "links" zählen.
             if ist_abbruch_event(event):
                 return True, None, None
 

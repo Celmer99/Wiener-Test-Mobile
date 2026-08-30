@@ -14,7 +14,6 @@ from games.webstil import (WIDTH, HEIGHT, FPS, WHITE, BLACK, FONT_MARKANT,
 
 SCORE_FONT = pygame.font.SysFont(FONT_MARKANT, 32)
 COUNTDOWN_FONT = pygame.font.SysFont(FONT_MARKANT, 80)
-TIMER_FONT = pygame.font.SysFont(FONT_MARKANT, 26)
 
 Wahrscheinlichkeit = 40
 BLENDE_DAUER = 0.5  # Sekunden
@@ -43,15 +42,9 @@ async def run(win, dauer_sekunden, tempo="normal"):
         pygame.display.flip()
         await asyncio.sleep(1.0)
 
-    start_time = time.time()
     richtig = 0
     fehler = 0
     reaktionszeiten = []
-
-    def timer_zeichnen():
-        vergangen = int(time.time() - start_time)
-        text = TIMER_FONT.render(f"{vergangen // 60:02d}:{vergangen % 60:02d}", True, WHITE)
-        win.blit(text, (30, HEIGHT - 70))
 
     def neues_muster():
         richtung = 0
@@ -97,7 +90,6 @@ async def run(win, dauer_sekunden, tempo="normal"):
             x_start, abstand = 430, 150
             for i, r in enumerate(rotationen):
                 win.blit(pygame.transform.rotate(DREIECK, r), (x_start + i * abstand, HEIGHT / 2 - position))
-            timer_zeichnen()
             abbrechen_zeichnen(win)
             pygame.display.flip()
             clock.tick(FPS)
@@ -111,7 +103,6 @@ async def run(win, dauer_sekunden, tempo="normal"):
 
         # Schwarzblende
         win.fill(BLACK)
-        timer_zeichnen()
         pygame.display.flip()
         blende_ende = time.perf_counter() + BLENDE_DAUER
         while time.perf_counter() < blende_ende:
