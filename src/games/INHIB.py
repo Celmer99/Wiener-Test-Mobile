@@ -130,16 +130,19 @@ async def _warte_ms(millisekunden):
     return True
 
 
-async def run(win, dauer_sekunden, tempo=None):
+async def run(win, dauer_sekunden, tempo=None, signalton=True):
+    # Ohne Signalton wird der Test zur reinen Reaktionsaufgabe: Es gibt dann
+    # keine Stopp-Durchgänge, man reagiert also auf jeden Pfeil.
     dauer_sekunden = max(10, int(dauer_sekunden))
-    dauer_text = f"{dauer_sekunden // 60} Min" if dauer_sekunden >= 60 else f"{dauer_sekunden} Sek"
+    zeit = f"{dauer_sekunden // 60} Min" if dauer_sekunden >= 60 else f"{dauer_sekunden} Sek"
+    dauer_text = f"{zeit}, {'mit' if signalton else 'ohne'} Signalton"
 
     richtige = fehler = auslassungen = 0
     stop_trials = stop_erfolge = ton_fehler = 0
     reaktionszeiten = []
     ssd_verlauf = []
     ssd = SSD_START
-    ton = stopton_erzeugen()
+    ton = stopton_erzeugen() if signalton else None
 
     for i in range(3, 0, -1):
         win.fill(WHITE)
@@ -157,7 +160,7 @@ async def run(win, dauer_sekunden, tempo=None):
     while time.perf_counter() - test_start < dauer_sekunden:
         richtung = random.choice(["links", "rechts"])
         rotation = 0 if richtung == "links" else 180
-        ist_stop = random.randint(1, 100) <= STOP_ANTEIL
+        ist_stop = signalton and random.randint(1, 100) <= STOP_ANTEIL
 
         abbruch, antwort, reaktionszeit = await _pfeilphase(win, rotation, ist_stop, ssd, ton)
         _kreuz_anzeigen(win)
@@ -190,28 +193,41 @@ async def run(win, dauer_sekunden, tempo=None):
     ssd_mittel = round(sum(ssd_verlauf) / len(ssd_verlauf)) if ssd_verlauf else 0
     ssrt = rt_mittel - ssd_mittel if (reaktionszeiten and ssd_verlauf) else 0
 
+    details = (f"Stopp {stop_erfolge}/{stop_trials}, SSD {ssd_mittel} ms, "
+               f"SSRT {ssrt} ms") if signalton else "ohne Signalton"
     ergebnisse.speichern(
-        "INHIB", dauer_text, richtige, fehler, rt_mittel,
-        details=f"Stopp {stop_erfolge}/{stop_trials}, SSD {ssd_mittel} ms, SSRT {ssrt} ms")
+        "INHIB", dauer_text, richtige, fehler, rt_mittel, details=details)
 
     await auswertung_anzeigen(win, richtige, fehler, auslassungen, stop_erfolge, stop_trials,
-                              ton_fehler, rt_mittel, ssd_mittel, ssrt)
+                              ton_fehler, rt_mittel, ssd_mittel, ssrt, signalton)
 
 
 async def auswertung_anzeigen(win, richtige, fehler, auslassungen, stop_erfolge, stop_trials,
-                              ton_fehler, rt_mittel, ssd_mittel, ssrt):
+                              ton_fehler, rt_mittel, ssd_mittel, ssrt, signalton=True):
     win.fill(WHITE)
     ergebnis_text = [
         f"Richtige Antworten: {richtige}",
         f"Falsche Antworten: {fehler}",
         f"Keine Reaktion: {auslassungen}",
         "",
-        f"Erfolgreich gestoppt: {stop_erfolge} von {stop_trials}",
-        f"Trotz Ton gedrückt: {ton_fehler}",
-        "",
-        f"Durchschnittliche Reaktionszeit: {rt_mittel} ms",
-        f"Mittleres Stopp-Signal-Delay: {ssd_mittel} ms",
-        f"Geschätzte Stopp-Reaktionszeit (SSRT): {ssrt} ms",
+    ]
+    # Die Stopp-Kennwerte ergeben nur mit Signalton einen Sinn
+    if signalton:
+        ergebnis_text += [
+            f"Erfolgreich gestoppt: {stop_erfolge} von {stop_trials}",
+            f"Trotz Ton gedrückt: {ton_fehler}",
+            "",
+            f"Durchschnittliche Reaktionszeit: {rt_mittel} ms",
+            f"Mittleres Stopp-Signal-Delay: {ssd_mittel} ms",
+            f"Geschätzte Stopp-Reaktionszeit (SSRT): {ssrt} ms",
+        ]
+    else:
+        ergebnis_text += [
+            "Geübt ohne Signalton",
+            "",
+            f"Durchschnittliche Reaktionszeit: {rt_mittel} ms",
+        ]
+    ergebnis_text += [
         "",
         "Tippe, um zum Hauptmenü zurückzukehren...",
     ]

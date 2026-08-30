@@ -26,6 +26,8 @@ SPIELE_OHNE_MAUSZEIGER = {"games.DAUF", "games.SIGNAL", "games.INHIB", "games.VI
 
 TEMPO_STUFEN = [("Langsam", "langsam"), ("Normal", "normal"), ("Schnell", "schnell")]
 EINPRAEG_STUFEN = [("Lang", "langsam"), ("Normal", "normal"), ("Kurz", "schnell")]
+# INHIB: mit oder ohne Stoppton üben
+SIGNALTON_STUFEN = [("Mit Ton", True), ("Ohne Ton", False)]
 SYMBOLE_VISGED = [(str(n), n) for n in (4, 5, 6, 7, 8, 9)]
 RUNDEN_VISGED = [(str(n), n) for n in (1, 5, 10, 20, 35, 50)]
 DAUERN_KACHELN = [
@@ -46,10 +48,18 @@ INSTRUKTIONEN = {
     ],
     "INHIB": [
         "In der Mitte erscheint ein Pfeil nach links oder rechts.",
-        "Tippe schnellstmöglich auf den passenden Pfeil-Button unten –",
-        "aber NICHT, wenn kurz darauf ein Ton erklingt!",
+        "Tippe schnellstmöglich auf die passende Bildschirmhälfte",
+        "(links oder rechts) – aber NICHT, wenn kurz darauf ein Ton erklingt!",
         "Der Ton kommt mit der Zeit immer später: Je besser du stoppst,",
         "desto schwerer wird es.",
+    ],
+    "INHIB_OHNE_TON": [
+        "In der Mitte erscheint ein Pfeil nach links oder rechts.",
+        "Tippe schnellstmöglich auf die passende Bildschirmhälfte",
+        "(links oder rechts).",
+        "",
+        "In dieser Übung ertönt kein Signalton –",
+        "reagiere also auf jeden Pfeil.",
     ],
     "SIMKAP": [
         "Streiche im rechten Feld alle Einträge durch, die auch",
@@ -187,12 +197,15 @@ async def kombi_menue(win, titel, gruppen, spalten=3):
                     return tuple(wahlen)
 
 
-async def instruktion_anzeigen(win, spiel_name):
+async def instruktion_anzeigen(win, spiel_name, signalton=None):
     """Rückgabe: True = Test starten, False = zurück zum Hauptmenü."""
     text_font = pygame.font.SysFont(FONT_MARKANT, 34)
     hinweis_font = pygame.font.SysFont(FONT_MARKANT, 28)
     clock = pygame.time.Clock()
-    zeilen = INSTRUKTIONEN.get(spiel_name, [])
+    if spiel_name == "INHIB" and signalton is False:
+        zeilen = INSTRUKTIONEN["INHIB_OHNE_TON"]
+    else:
+        zeilen = INSTRUKTIONEN.get(spiel_name, [])
 
     while True:
         hintergrund_zeichnen(win)
@@ -293,7 +306,7 @@ async def statistik_anzeigen(win):
 
 
 async def spiel_starten(win, modulname, spiel_name, wert=None, tempo=None,
-                        symbole=None, runden=None):
+                        symbole=None, runden=None, signalton=None):
     modul = importlib.import_module(modulname)
 
     # Bei diesen Tests lenkt der Mauszeiger nur ab – VISGED und SIMKAP
@@ -303,6 +316,11 @@ async def spiel_starten(win, modulname, spiel_name, wert=None, tempo=None,
     try:
         if modulname == "games.VISGED":
             await modul.run(win, symbole=symbole, runden=runden, tempo=tempo)
+        elif modulname == "games.INHIB":
+            # None (nicht gewählt) bedeutet: mit Ton, sonst würde die
+            # Prüfung unten den Ton fälschlich abschalten
+            await modul.run(win, dauer_sekunden=wert,
+                            signalton=True if signalton is None else signalton)
         else:
             await modul.run(win, dauer_sekunden=wert, tempo=tempo)
     finally:
@@ -341,9 +359,23 @@ async def main():
                 continue
             await spiel_starten(win, modulname, spiel_name, tempo=tempo,
                                 symbole=symbole, runden=runden)
-        elif modulname in ("games.SIMKAP", "games.INHIB"):
-            # SIMKAP hat keine Geschwindigkeitsstufen; INHIB regelt seine
-            # Schwierigkeit selbst (adaptives Stoppsignal) – wie am PC.
+        elif modulname == "games.INHIB":
+            # Keine Geschwindigkeitsstufen (adaptives Stoppsignal regelt das
+            # selbst), dafür die Wahl mit oder ohne Signalton
+            auswahl = await kombi_menue(win, spiel_name, [
+                ("Signalton", SIGNALTON_STUFEN, True),
+                ("Übungsdauer", DAUERN_KACHELN, None),
+            ])
+            if auswahl is None:
+                win = await fenster_oeffnen()
+                continue
+            signalton, wert = auswahl
+            if not await instruktion_anzeigen(win, spiel_name, signalton):
+                win = await fenster_oeffnen()
+                continue
+            await spiel_starten(win, modulname, spiel_name, wert=wert,
+                                signalton=signalton)
+        elif modulname == "games.SIMKAP":
             auswahl = await kombi_menue(win, spiel_name, [
                 ("Übungsdauer", DAUERN_KACHELN, None),
             ])
