@@ -273,6 +273,33 @@ function show_infobox() {
            right: 10px;
            border: 1px solid black;
         }
+
+        /* Erstes Mobil-Layout: Testoberflächen werden im Querformat genutzt. */
+        #rotate-prompt { display: none; }
+        @media screen and (orientation: portrait) and (max-width: 900px) {
+            #rotate-prompt {
+                display: flex;
+                position: fixed;
+                inset: 0;
+                z-index: 1000001;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                box-sizing: border-box;
+                padding: 30px;
+                background: #0c0c0c;
+                color: #ebebe6;
+                text-align: center;
+                font: 600 22px/1.45 Arial, sans-serif;
+            }
+            #rotate-prompt small {
+                display: block;
+                margin-top: 14px;
+                color: #969b96;
+                font-size: 15px;
+                font-weight: normal;
+            }
+        }
     </style>
 
     <script>
@@ -289,6 +316,10 @@ function show_infobox() {
 </head>
 
 <body>
+    <div id="rotate-prompt" role="status">
+        Smartphone bitte ins Querformat drehen
+        <small>Die fünf Übungen sind für die Nutzung im Querformat ausgelegt.</small>
+    </div>
 
     <div id="transfer" align=center>
 <!--        <div class="spinner" id='spinner'></div> -->
