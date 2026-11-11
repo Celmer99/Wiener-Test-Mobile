@@ -1,6 +1,6 @@
 # =======================================
 # Wiener Test SEK – Web-Version (Browser, mausgesteuert am PC, touch am Handy)
-# Enthält alle sechs Testverfahren: DAUF, SIGNAL, INHIB, SIMKAP, VISGED, VIGIL.
+# Mobile Auswahl: DAUF, SIGNAL, VIGIL, INHIB und VISGED. SIMKAP bleibt vorerst ausgeblendet.
 # =======================================
 import asyncio
 import importlib
@@ -15,10 +15,9 @@ from games.webstil import (WIDTH, HEIGHT, FPS, WHITE, BLACK, STEEL, BTN_FILL,
 SPIELE = [
     ("DAUF", "games.DAUF"),
     ("SIGNAL", "games.SIGNAL"),
-    ("INHIB", "games.INHIB"),
-    ("SIMKAP", "games.SIMKAP"),
-    ("VISGED", "games.VISGED"),
     ("VIGIL", "games.VIGIL"),
+    ("INHIB", "games.INHIB"),
+    ("VISGED", "games.VISGED"),
 ]
 
 # Tests, bei denen der Mauszeiger während der Übung ausgeblendet wird
@@ -101,19 +100,24 @@ def kachel_reihe(eintraege, kachel_w, kachel_h, gap, start_y, spalten):
     return rects
 
 
-async def button_menue(win, titel, eintraege, button_height=70, gap=18, start_y=260):
-    """Einfache Buttonliste. Rückgabe: gewählter Wert oder None."""
-    button_font = pygame.font.SysFont(FONT_MARKANT, 30)
+async def button_menue(win, titel, eintraege, button_height=170, gap=30,
+                       start_y=265, spalten=2):
+    """Touchfreundliches, zweispaltiges Hauptmenü im Querformat."""
+    button_font = pygame.font.SysFont(FONT_MARKANT, 46)
     clock = pygame.time.Clock()
-    button_width = 700
+    spalten = max(1, min(spalten, len(eintraege)))
+    button_width = 770
+    gesamt_breite = spalten * button_width + (spalten - 1) * gap
+    x0 = (WIDTH - gesamt_breite) // 2
 
     while True:
         hintergrund_zeichnen(win)
         titel_zeichnen(win, titel)
         rects = []
         for i, (label, wert) in enumerate(eintraege):
-            rect = pygame.Rect(WIDTH // 2 - button_width // 2,
-                               start_y + i * (button_height + gap),
+            zeile, spalte = divmod(i, spalten)
+            rect = pygame.Rect(x0 + spalte * (button_width + gap),
+                               start_y + zeile * (button_height + gap),
                                button_width, button_height)
             rects.append((rect, wert))
             button_zeichnen(win, rect, label, button_font, False, rot=(wert is None))
@@ -336,7 +340,8 @@ async def main():
         eintraege.append(("Statistik", "STATISTIK"))
 
         modulname = await button_menue(win, "Wiener Test SEK", eintraege,
-                                       button_height=90, gap=22, start_y=230)
+                                       button_height=170, gap=30,
+                                       start_y=265, spalten=2)
 
         if modulname == "STATISTIK":
             await statistik_anzeigen(win)
